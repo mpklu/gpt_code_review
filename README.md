@@ -13,6 +13,14 @@ Use Chat-GPT to review your changes in Git repository.
 pip3 install -r requirements.txt
 ```
 
+#### Review the changes of local Git Repo
+
 ```
 python3 gpt_review.py local --repo_path=[PATH_TO_GIT_REPO]
+```
+
+#### Review the changes give a GitLab project ID and commit_sha
+
+```
+    python3 ./gpt_review.py gitlab --project_id=[gitlab_project_id] --commit-sha=[commit_sha]
 ```

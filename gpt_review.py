@@ -1,15 +1,18 @@
 import fire
 import subprocess
 import os
-from dotenv import load_dotenv
+import requests
+from dotenv_vault import load_dotenv
 from langchain_openai import ChatOpenAI
 from langchain_core.prompts.chat import ChatPromptTemplate
+from langchain_core.messages import ChatMessage
+from prompts import system_prompt
 
 load_dotenv()
+
 openai_api_key = os.getenv("OPENAI_API_KEY")
 gitlab_token = os.getenv("GITLAB_TOKEN")
 gitlab_server = os.getenv("GITLAB_SERVER")
-
 chat_model = ChatOpenAI(api_key=openai_api_key)  # default model is gpt-3.5-turbo
 
 # 1. Point out existing issues in concise language and stern tone.
@@ -20,35 +23,7 @@ chat_model = ChatOpenAI(api_key=openai_api_key)  # default model is gpt-3.5-turb
 
 
 def prompt_template():
-    template = """You are a senior programming expert. 
-    GitLab branch code changes will be provided in the form of git diff strings. 
-    Please review this code. 
-    Then the returned content of your review content must strictly comply with the following format, 
-    including section title. 
-    Explanation of the variable content in the template: 
-    Variable 1 is the issues discovered by code review. 
-    Variable 2 is specific modification suggestions. 
-    Variable 3 is the modified code you gave. 
-    Must require: 
-
-    1. Clearly identify existing issues using concise language and a firm tone.
-    2. Prioritize up to three issues, with the following order of importance: typo, logic, and other issues.
-    3. Assume completeness of functions if only partially included in the diff.
-    4. Ensure feedback content adheres strictly to markdown format.
-    5. Avoid including explanations for variable content.
-    6. Have a clear title structure. Have a clear title structure. Have a clear title structure.
-    
-The return format is strictly as follows:
-
-#### 👿 Issues:
-[Variable 1]
-
-#### 🥸 Modification suggestions:
-[Variable 2]
-
-#### 😇 Modified code:
-[Variable 3]
-    """
+    template = system_prompt
 
     human_template = "Review the code diff: {content}"
 
@@ -77,8 +52,9 @@ def get_git_diff(repo_path):
         os.chdir(repo_path)
 
         # Run 'git diff' command and capture the output
+        command = "git diff -U20 && git diff --cached -U20"
         git_diff_output = subprocess.run(
-            ["git", "diff", "-U20"], capture_output=True, text=True
+            command, shell=True, capture_output=True, text=True
         )
 
         # Check if 'git diff' command was successful
@@ -109,26 +85,32 @@ def review_local(repo_path):
 def get_gitlab_diff(project_id, commit_sha):
     # Define the GitLab API URL
     gitlab_api_url = f"{gitlab_server}/api/v4/projects/{project_id}/repository/commits/{commit_sha}/diff"
-    return ""
-    # Send a GET request to the GitLab API URL
-    # response = requests.get(gitlab_api_url)
+    headers = {"PRIVATE-TOKEN": gitlab_token}
 
-    # # Check if the request was successful
-    # if response.status_code == 200:
-    #     # Return the diff content
-    #     return response.json()["diff"]
-    # else:
-    #     # Print an error message if the request failed
-    #     print("Error: Failed to retrieve GitLab diff content.")
-    #     return None
+    response = requests.get(gitlab_api_url, headers=headers)
+    if response.status_code == 200:
+        json = response.json()
+        ret = ""
+        for diff in json:
+            filename = diff["new_path"]
+            diff_content = diff["diff"]
+
+            # print(f"Filename: {filename}")
+            # print("Diff Content:")
+            for line in diff_content.split("\n"):
+                ret += line + "\n"
+        return ret
+    else:
+        return None
 
 
-def review_gitlab(project_id, commit_sha):
+def review_gitlab(project_id: int, commit_sha: str):
     # Get the git diff content for the GitLab repository
     diff_content = get_gitlab_diff(project_id, commit_sha)
 
-    print("git diff:")
-    print(diff_content)
+    # print("git diff:")
+    # print(diff_content)
+    review_code_diff(diff_content)
 
 
 if __name__ == "__main__":
