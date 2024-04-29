@@ -7,6 +7,7 @@ from langchain_openai import ChatOpenAI
 from langchain_core.prompts.chat import ChatPromptTemplate
 from langchain_core.messages import ChatMessage
 from prompts import system_prompt
+from gitlab.api import *
 
 load_dotenv()
 
@@ -14,7 +15,7 @@ openai_api_key = os.getenv("OPENAI_API_KEY")
 gitlab_token = os.getenv("GITLAB_TOKEN")
 gitlab_server = os.getenv("GITLAB_SERVER")
 chat_model = ChatOpenAI(api_key=openai_api_key)  # default model is gpt-3.5-turbo
-
+gitlab_config = Config(gitlab_token, gitlab_server)
 # 1. Point out existing issues in concise language and stern tone.
 # 2. Identify no more than three issues, prioritizing them in descending order: typo, logic, and any other issues.
 # 3. If a function is only partially included in the diff, you can assume that the function is complete.
@@ -82,31 +83,9 @@ def review_local(repo_path):
     review_code_diff(diff_content)
 
 
-def get_gitlab_diff(project_id, commit_sha):
-    # Define the GitLab API URL
-    gitlab_api_url = f"{gitlab_server}/api/v4/projects/{project_id}/repository/commits/{commit_sha}/diff"
-    headers = {"PRIVATE-TOKEN": gitlab_token}
-
-    response = requests.get(gitlab_api_url, headers=headers)
-    if response.status_code == 200:
-        json = response.json()
-        ret = ""
-        for diff in json:
-            filename = diff["new_path"]
-            diff_content = diff["diff"]
-
-            # print(f"Filename: {filename}")
-            # print("Diff Content:")
-            for line in diff_content.split("\n"):
-                ret += line + "\n"
-        return ret
-    else:
-        return None
-
-
 def review_gitlab(project_id: int, commit_sha: str):
     # Get the git diff content for the GitLab repository
-    diff_content = get_gitlab_diff(project_id, commit_sha)
+    diff_content = get_gitlab_diff(gitlab_config, project_id, commit_sha)
 
     # print("git diff:")
     # print(diff_content)
